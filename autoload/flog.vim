@@ -264,6 +264,15 @@ function! flog#filter_completions(arg_lead, completions) abort
   return filter(a:completions, 'v:val =~# "^" . l:lead')
 endfunction
 
+function! flog#format_completion(completion, ...)
+  if a:completion =~# '\s'
+    let l:trailing = exists('a:0') ? a:0 : v:true
+    let l:replace = l:trailing ? '"\0"' : '"\0'
+    return substitute(a:completion, '[^=]\+=\zs.*', l:replace, '')
+  endif
+  return a:completion
+endfunction
+
 function! flog#split_single_completable_arg(arg) abort
   let l:start_pattern = '^\([^=]*=\)\?'
   let l:start = matchstr(a:arg, l:start_pattern)
@@ -338,10 +347,11 @@ function! flog#complete_format(arg_lead) abort
     " format ends with a completable pattern
     let l:lead = substitute(a:arg_lead, l:completable_pattern, '', '')
     let l:completions = map(copy(g:flog_completion_specifiers), 'l:lead . v:val')
-    return flog#filter_completions(a:arg_lead, copy(l:completions))
+    let l:completions = flog#filter_completions(a:arg_lead, copy(l:completions))
+    return map(l:completions, 'flog#format_completion(v:val, 0)')
   else
     " format does not end with any special atom
-    return [a:arg_lead . '%']
+    return [flog#format_completion(a:arg_lead . '%', 0)]
   endif
 endfunction
 
@@ -388,27 +398,28 @@ function! flog#complete_path(arg_lead) abort
   endtry
   let l:files = getcompletion(l:path, 'file')
 
-  " build the completion and re-apply escape sequences
-  let l:completions = map(l:files, "l:lead . substitute(v:val, ' ', '\\\\ ', '')")
+  let l:completions = map(l:files, "flog#format_completion(l:lead . v:val)")
 
-  return flog#filter_completions(a:arg_lead, l:completions)
+  return l:completions
 endfunction
 
 function! flog#complete(arg_lead, cmd_line, cursor_pos) abort
-  if a:arg_lead ==# ''
-    return flog#filter_completions(a:arg_lead, copy(g:flog_default_completion))
-  elseif a:arg_lead =~# '^-format='
-    return flog#complete_format(a:arg_lead)
-  elseif a:arg_lead =~# '^-date='
-    return flog#complete_date(a:arg_lead)
-  elseif a:arg_lead =~# '^-open-cmd='
-    return flog#complete_open_cmd(a:arg_lead)
-  elseif a:arg_lead =~# '^-rev='
-    return flog#complete_rev(a:arg_lead)
-  elseif a:arg_lead =~# '^-path='
-    return flog#complete_path(a:arg_lead)
+  let [l:split_args, l:current_arg, l:quote_char, l:is_escaped] = flog#split_args_partially(a:cmd_line, 0, a:cursor_pos)
+
+  if l:current_arg ==# ''
+    return flog#filter_completions(l:current_arg, copy(g:flog_default_completion))
+  elseif l:current_arg =~# '^-format='
+    return flog#complete_format(l:current_arg)
+  elseif l:current_arg =~# '^-date='
+    return flog#complete_date(l:current_arg)
+  elseif l:current_arg =~# '^-open-cmd='
+    return flog#complete_open_cmd(l:current_arg)
+  elseif l:current_arg =~# '^-rev='
+    return flog#complete_rev(l:current_arg)
+  elseif l:current_arg =~# '^-path='
+    return flog#complete_path(l:current_arg)
   endif
-  return flog#filter_completions(a:arg_lead, copy(g:flog_default_completion))
+  return flog#filter_completions(l:current_arg, copy(g:flog_default_completion))
 endfunction
 
 " }}}
