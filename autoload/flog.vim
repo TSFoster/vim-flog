@@ -122,6 +122,67 @@ function! flog#get_default_args() abort
   return l:defaults
 endfunction
 
+function! flog#split_args_partially(args, start, end) abort
+  let l:split_args = []
+
+  " current splitting state
+  let l:current_arg = ''
+  let l:quote_char = ''
+  let l:is_escaped = v:false
+
+  let l:i = a:start
+  while l:i < a:end
+    let l:c = a:args[l:i]
+
+    if l:is_escaped
+      let l:current_arg .= l:c
+      let l:is_escaped = v:false
+    elseif l:c ==# '\'
+      let l:is_escaped = v:true
+    elseif l:quote_char !=# '' && l:c ==# l:quote_char
+      let l:quote_char = ''
+    elseif l:quote_char ==# '' && l:c =~# '\s'
+      if l:current_arg !=# ''
+        let l:split_args += [l:current_arg]
+      endif
+      let l:current_arg = ''
+    elseif l:quote_char ==# '' && l:c ==# '"'
+      let l:quote_char = '"'
+    elseif l:quote_char ==# '' && l:c ==# "'"
+      let l:quote_char = "'"
+    else
+      let l:current_arg .= l:c
+    endif
+
+    let l:i += 1
+  endwhile
+
+  return [l:split_args, l:current_arg, l:quote_char, l:is_escaped]
+endfunction
+
+" regex would be faster for splitting args but harder to maintain
+function! flog#split_args(args, ...) abort
+  let l:ignore_end_errors = exists('a:0') ? a:0 : v:false
+
+  let [l:split_args, l:current_arg, l:quote_char, l:is_escaped] = flog#split_args_partially(a:args, 0, len(a:args))
+
+  if !l:ignore_end_errors
+    if l:quote_char !=# ''
+      throw g:flog_arguments_missing_end_quote
+    endif
+
+    if l:is_escaped
+      throw g:flog_arguments_trailing_escape
+    endif
+  endif
+
+  if l:current_arg != ''
+    let l:split_args += [l:current_arg]
+  endif
+
+  return l:split_args
+endfunction
+
 function! flog#parse_arg_opt(arg) abort
   let l:opt = matchstr(a:arg, '=\zs.*')
   return l:opt
@@ -134,7 +195,7 @@ endfunction
 function! flog#parse_set_args(args, current_args, defaults) abort
   let l:has_set_path = 0
 
-  for l:arg in a:args
+  for l:arg in flog#split_args(a:args)
     if l:arg =~# '^-format=.*'
       let a:current_args.format = flog#parse_arg_opt(l:arg)
     elseif l:arg ==# '-format='

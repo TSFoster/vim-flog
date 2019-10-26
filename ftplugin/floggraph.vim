@@ -113,7 +113,7 @@ command! -buffer Flogsplitcommit call flog#preview_commit('<mods> Gsplit')
 
 command! -buffer -range -bang -complete=customlist,flog#complete_git -nargs=* Floggit call flog#git('<mods>', '<bang>', <q-args>)
 
-command! -bang -complete=customlist,flog#complete -nargs=* Flogupdate call flog#update_options([<f-args>], '<bang>' ==# '!')
+command! -bang -complete=customlist,flog#complete -nargs=* Flogupdate call flog#update_options(<q-args>, '<bang>' ==# '!')
 
 " }}}
 
